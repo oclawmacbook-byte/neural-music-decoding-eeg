@@ -36,21 +36,21 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 DATASETS = {
-    "ds002691": {
-        "name": "EEG-fMRI music dataset",
-        "n_subjects": 18,
+    "ds002725": {
+        "name": "EEG-fMRI music dataset (joint EEG-fMRI during affective music listening)",
+        "n_subjects": 21,
         "n_runs": 3,
-        "openneuro_url": "https://openneuro.org/datasets/ds002691",
+        "openneuro_url": "https://openneuro.org/datasets/ds002725",
         "snapshot": "1.0.0",
-        "doi": "10.18112/openneuro.ds002691.v1.0.0",
+        "doi": "10.18112/openneuro.ds002725.v1.0.0",
     },
-    "ds002137": {
-        "name": "EEG-only music dataset",
-        "n_subjects": 19,
+    "ds002721": {
+        "name": "EEG-only music dataset (EEG during affective music listening)",
+        "n_subjects": 20,
         "n_runs": 3,
-        "openneuro_url": "https://openneuro.org/datasets/ds002137",
-        "snapshot": "1.0.5",
-        "doi": "10.18112/openneuro.ds002137.v1.0.5",
+        "openneuro_url": "https://openneuro.org/datasets/ds002721",
+        "snapshot": "1.0.1",
+        "doi": "10.18112/openneuro.ds002721.v1.0.1",
     },
 }
 
@@ -185,7 +185,7 @@ def parse_args() -> argparse.Namespace:
         "--dataset",
         choices=list(DATASETS.keys()),
         required=True,
-        help="Dataset identifier (ds002691 = EEG-fMRI, ds002137 = EEG-only).",
+        help="Dataset identifier (ds002725 = EEG-fMRI, ds002721 = EEG-only).",
     )
     parser.add_argument(
         "--output",
