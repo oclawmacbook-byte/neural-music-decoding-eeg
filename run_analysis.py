@@ -189,9 +189,10 @@ def resample_audio(audio: np.ndarray, orig_sr: int = ORIG_SR) -> np.ndarray:
 def decode_music_code_strict(music_channel_v: np.ndarray, stimuli_dir: Path):
     """
     Decode music stimulus ID from the 'music' EDF channel.
-    Channel in Volts -> µV, take max-abs, multiply by 10, round.
-    code = round(max_abs_uV * 10)
+    Per channels.tsv: "multiply the value by 20" (value in µV).
+    code = round(max_abs_uV * 20)
     A = code // 100, B = (code % 100) // 10, C = code % 10
+    Example: 14.1 µV * 20 = 282 -> 2-8_2.wav
 
     STRICT: only accept trials where:
       - A >= 1, A <= 9
@@ -200,11 +201,11 @@ def decode_music_code_strict(music_channel_v: np.ndarray, stimuli_dir: Path):
       - C in {1, 2, 3}
       - The file {A}-{B}_{C}.wav exists
 
-    Returns stim_id string (e.g. '1-4_1') or None if any constraint fails.
+    Returns stim_id string (e.g. '2-8_2') or None if any constraint fails.
     """
     music_uv = music_channel_v * 1e6  # V -> µV
     max_val = float(np.max(np.abs(music_uv)))
-    code = round(max_val * 10)
+    code = round(max_val * 20)  # channels.tsv spec: value_uV * 20 = 3-digit code
     if code == 0:
         return None
 
