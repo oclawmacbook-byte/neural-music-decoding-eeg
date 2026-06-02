@@ -129,6 +129,7 @@ def build_spherical_forward(
 def _make_dipole_source_space(
     info: mne.Info,
     coords_m: np.ndarray,
+    coord_frame: int = None,
 ) -> mne.SourceSpaces:
     """Create a discrete source space at given coordinates.
 
@@ -136,12 +137,16 @@ def _make_dipole_source_space(
     ----------
     info : mne.Info
     coords_m : np.ndarray, shape (n_dipoles, 3)
-        Dipole positions in metres (head coordinate system).
+        Dipole positions in metres.
+    coord_frame : int or None
+        FIFF coordinate frame constant. Defaults to FIFFV_COORD_HEAD.
 
     Returns
     -------
     src : mne.SourceSpaces
     """
+    if coord_frame is None:
+        coord_frame = mne.io.constants.FIFF.FIFFV_COORD_HEAD
     n = len(coords_m)
     # Unit normals pointing outward from origin
     norms = coords_m / (np.linalg.norm(coords_m, axis=1, keepdims=True) + 1e-12)
@@ -152,7 +157,7 @@ def _make_dipole_source_space(
         "inuse": np.ones(n, dtype=int),
         "nuse": n,
         "np": n,
-        "coord_frame": mne.io.constants.FIFF.FIFFV_COORD_HEAD,
+        "coord_frame": coord_frame,
         "id": 1,
         "type": "discrete",
         "vertno": np.arange(n),
@@ -162,6 +167,110 @@ def _make_dipole_source_space(
         "nuse_tri": 0,
     }
     return mne.SourceSpaces([src_dict])
+
+
+def build_bem_forward(
+    info: mne.Info,
+    dipole_coords_mni: np.ndarray,
+) -> mne.Forward:
+    """Build a realistic 3-shell BEM forward model using the fsaverage template.
+
+    Uses MNE's fsaverage BEM (scalp/skull/cortex) in place of the spherical
+    approximation.  Dipole positions are in MNI space, which aligns with
+    fsaverage MRI (surface RAS) space.  Falls back to the spherical model if
+    the fsaverage data cannot be fetched.
+
+    Parameters
+    ----------
+    info : mne.Info
+    dipole_coords_mni : np.ndarray, shape (n_dipoles, 3)
+        Dipole MNI coordinates in millimetres.
+
+    Returns
+    -------
+    fwd : mne.Forward
+    """
+    import os
+    from pathlib import Path as _Path
+
+    try:
+        fs_dir = mne.datasets.fetch_fsaverage(verbose=False)
+    except Exception as exc:
+        warnings.warn(
+            f"Could not fetch fsaverage data ({exc}). "
+            "Falling back to spherical model."
+        )
+        return build_spherical_forward(info, dipole_coords_mni)
+
+    subjects_dir = str(_Path(fs_dir).parent)
+    bem_path = os.path.join(
+        subjects_dir, "fsaverage", "bem",
+        "fsaverage-5120-5120-5120-bem-sol.fif",
+    )
+    if not os.path.exists(bem_path):
+        warnings.warn(
+            f"fsaverage BEM solution not found at {bem_path}. "
+            "Falling back to spherical model."
+        )
+        return build_spherical_forward(info, dipole_coords_mni)
+
+    bem = mne.read_bem_solution(bem_path, verbose=False)
+
+    trans_path = os.path.join(
+        subjects_dir, "fsaverage", "bem", "fsaverage-trans.fif"
+    )
+    trans = trans_path if os.path.exists(trans_path) else None
+
+    # Source space in MRI (surface RAS) coordinates
+    # MNI mm ≈ fsaverage surface RAS mm
+    coords_m = dipole_coords_mni / 1000.0
+    src = _make_dipole_source_space(
+        info, coords_m,
+        coord_frame=mne.io.constants.FIFF.FIFFV_COORD_MRI,
+    )
+
+    try:
+        fwd = mne.make_forward_solution(
+            info,
+            trans=trans,
+            src=src,
+            bem=bem,
+            eeg=True,
+            meg=False,
+            mindist=0.0,
+            verbose=False,
+        )
+        return fwd
+    except Exception as exc:
+        warnings.warn(
+            f"BEM forward solution failed ({exc}). "
+            "Falling back to spherical model."
+        )
+        return build_spherical_forward(info, dipole_coords_mni)
+
+
+def build_forward(
+    info: mne.Info,
+    dipole_coords_mni: np.ndarray,
+    use_bem: bool = True,
+) -> mne.Forward:
+    """Build a forward model, preferring fsaverage BEM over spherical.
+
+    Parameters
+    ----------
+    info : mne.Info
+    dipole_coords_mni : np.ndarray, shape (n_dipoles, 3)
+        Dipole MNI coordinates in millimetres.
+    use_bem : bool
+        If True (default), attempt fsaverage BEM; fall back to sphere on error.
+
+    Returns
+    -------
+    fwd : mne.Forward
+    """
+    if use_bem:
+        return build_bem_forward(info, dipole_coords_mni)
+    return build_spherical_forward(info, dipole_coords_mni)
 
 
 # ---------------------------------------------------------------------------

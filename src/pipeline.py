@@ -30,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from scipy.signal import hilbert
 
 from .data_loader import (
     list_subjects,
@@ -40,7 +41,7 @@ from .data_loader import (
 )
 from .eeg_preprocessing import preprocess_eeg
 from .source_localization import (
-    build_spherical_forward,
+    build_forward,
     extract_features_from_epochs,
 )
 from .models import BiLSTMDecoder, train_model, predict, save_model, load_model
@@ -68,6 +69,14 @@ LEARNING_RATE = 1e-3
 # ---------------------------------------------------------------------------
 # Audio preparation helpers
 # ---------------------------------------------------------------------------
+
+def compute_audio_envelope(audio: np.ndarray) -> np.ndarray:
+    """Compute the amplitude envelope via Hilbert transform (Daly 2023).
+
+    The paper targets the audio *envelope*, not the raw waveform.
+    """
+    return np.abs(hilbert(audio)).astype(np.float32)
+
 
 def prepare_audio_target(
     audio_waveform: np.ndarray,
@@ -162,8 +171,8 @@ def extract_subject_data(
             warnings.warn(f"Epoching failed: {e}")
             continue
 
-        # Build forward model (spherical)
-        fwd = build_spherical_forward(raw_clean.info, dipole_coords_mni)
+        # Build forward model (BEM if available, else spherical)
+        fwd = build_forward(raw_clean.info, dipole_coords_mni)
 
         # Extract features (returns shape: n_epochs, 124, n_time_100Hz)
         feats = extract_features_from_epochs(
@@ -197,8 +206,9 @@ def extract_subject_data(
                 audio_raw = np.zeros(n_time, dtype=np.float32)
                 stim_name = f"unknown_{len(X_list)}"
 
-            # Downsample audio to DECODING_SR
-            audio_dec = downsample_audio(audio_raw, factor=DECIM_FACTOR)
+            # Compute envelope then downsample to DECODING_SR (Daly 2023)
+            audio_env = compute_audio_envelope(audio_raw)
+            audio_dec = downsample_audio(audio_env, factor=DECIM_FACTOR)
             audio_tgt = prepare_audio_target(audio_dec, n_time)
 
             X_list.append(feats[i])         # (n_time, 124)
@@ -357,6 +367,7 @@ def run_eegfmri_pipeline(
     fmt: str = "brainvision",
     device: Optional[str] = None,
     n_train_epochs: int = TRAIN_EPOCHS,
+    fmri_tr: float = 2.0,
     verbose: bool = True,
 ) -> Dict:
     """Run the full EEG-fMRI pipeline.
@@ -373,6 +384,8 @@ def run_eegfmri_pipeline(
     fmt : str
     device : str or None
     n_train_epochs : int
+    fmri_tr : float
+        fMRI repetition time (seconds). ds002725 uses TR=2.0 s (Daly 2023).
     verbose : bool
 
     Returns
@@ -395,6 +408,7 @@ def run_eegfmri_pipeline(
             dataset_dir,
             subject_dirs,
             n_runs=n_runs,
+            t_r=fmri_tr,
             verbose=verbose,
         )
         # Save

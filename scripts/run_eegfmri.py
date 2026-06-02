@@ -109,8 +109,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fmri_tr",
         type=float,
-        default=1.5,
-        help="fMRI repetition time in seconds.",
+        default=2.0,
+        help="fMRI repetition time in seconds (ds002725 uses TR=2.0 s).",
     )
     parser.add_argument(
         "--eeg_format",
@@ -181,6 +181,7 @@ def main() -> None:
         fmt=args.eeg_format,
         device=args.device,
         n_train_epochs=args.n_train_epochs,
+        fmri_tr=args.fmri_tr,
         verbose=verbose,
     )
 

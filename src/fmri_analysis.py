@@ -163,7 +163,7 @@ def compute_music_contrast(
 def subject_first_level(
     subject_dir: Path,
     n_runs: int = 3,
-    t_r: float = 1.5,
+    t_r: float = 2.0,
     smoothing_fwhm: float = 6.0,
     verbose: int = 0,
 ) -> List[nib.Nifti1Image]:
@@ -415,7 +415,7 @@ def run_full_fmri_pipeline(
     dataset_dir: Path,
     subject_dirs: List[Path],
     n_runs: int = 3,
-    t_r: float = 1.5,
+    t_r: float = 2.0,
     smoothing_fwhm: float = 6.0,
     n_dipoles: int = N_DIPOLES,
     min_distance_mm: float = MIN_DIPOLE_DISTANCE_CM * 10.0,

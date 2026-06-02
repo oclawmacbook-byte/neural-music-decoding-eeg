@@ -22,7 +22,7 @@ import warnings
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.signal import spectrogram
+from scipy.signal import butter, filtfilt, spectrogram
 from scipy.stats import pearsonr
 from skimage.metrics import structural_similarity as ssim
 
@@ -30,6 +30,15 @@ from skimage.metrics import structural_similarity as ssim
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _bandpass_for_eval(signal: np.ndarray, fs: float = 100.0) -> np.ndarray:
+    """Band-pass 0.035–4.75 Hz as specified in Daly (2023) for trial-level analysis."""
+    b, a = butter(4, [0.035, 4.75], btype="bandpass", fs=fs)
+    min_len = 3 * max(len(a), len(b))
+    if len(signal) <= min_len:
+        return signal
+    return filtfilt(b, a, signal).astype(np.float32)
+
 
 def _safe_pearsonr(a: np.ndarray, b: np.ndarray) -> Tuple[float, float]:
     """Pearson r with a guard for zero-variance arrays."""
@@ -292,9 +301,12 @@ def evaluate_trial(
     -------
     metrics : dict with keys 'r_time', 'p_time', 'r_freq', 'p_freq', 'ssim'
     """
-    r_t, p_t = time_domain_correlation(predicted, target)
-    r_f, p_f = frequency_domain_correlation(predicted, target, fs=fs)
-    ssim_val = spectrogram_ssim(predicted, target, fs=fs)
+    # Apply 0.035-4.75 Hz band-pass before correlation (Daly 2023)
+    pred_bp = _bandpass_for_eval(predicted, fs=fs)
+    tgt_bp = _bandpass_for_eval(target, fs=fs)
+    r_t, p_t = time_domain_correlation(pred_bp, tgt_bp)
+    r_f, p_f = frequency_domain_correlation(pred_bp, tgt_bp, fs=fs)
+    ssim_val = spectrogram_ssim(pred_bp, tgt_bp, fs=fs)
     return {
         "r_time": r_t,
         "p_time": p_t,
